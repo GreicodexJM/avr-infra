@@ -1,6 +1,6 @@
 services:
   avr-core:
-    image: agentvoiceresponse/avr-core
+    image: greicodex/avr-core
     platform: linux/x86_64
     container_name: avr-core
     restart: always

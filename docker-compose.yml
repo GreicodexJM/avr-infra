@@ -1,3 +1,16 @@
+## Local inference (Vosk ASR + Kokoro TTS) + Remote Anthropic LLM — Spanish LatAm
+##
+## Prerequisites:
+##   1. Download a Spanish Vosk model from https://alphacephei.com/vosk/models
+##      Recommended: vosk-model-es-0.42 (full) or vosk-model-small-es-0.42 (lighter)
+##      Extract into ./model/ so the path is ./model/vosk-model-es-0.42/ (or similar)
+##
+##   2. Set ANTHROPIC_API_KEY in your .env file.
+##
+##   3. (Optional) Check available Kokoro Spanish voices at http://localhost:8880/voices
+##      after the stack is up. Default voice is ef_dora (Spanish female).
+##      Override with KOKORO_VOICE=<voice_id> in your .env.
+
 services:
   avr-core:
     image: greicodex/avr-core
@@ -5,32 +18,32 @@ services:
     container_name: avr-core
     restart: always
     environment:
-      - PORT=5001 
+      - PORT=5001
       - ASR_URL=http://avr-asr-vosk:6010/speech-to-text-stream
-      - LLM_URL=http://avr-llm-openai:6002/prompt-stream
+      - LLM_URL=http://avr-llm-openai:6016/prompt-stream
       - TTS_URL=http://avr-tts-kokoro:6012/text-to-speech-stream
       - INTERRUPT_LISTENING=true
-      - SYSTEM_MESSAGE="Hello, how can I help you today?"
+      - SYSTEM_MESSAGE="Hola, ¿en qué puedo ayudarte hoy?"
     ports:
       - 5001:5001
     networks:
       - avr
 
   avr-asr-vosk:
-    image: agentvoiceresponse/avr-asr-vosk
+    image: greicodex/avr-asr-vosk
     platform: linux/x86_64
     container_name: avr-asr-vosk
     restart: always
     environment:
       - PORT=6010
-      - MODEL_PATH=model
+      - MODEL_PATH=model/vosk-model-es-0.42
     volumes:
       - ./model:/usr/src/app/model
     networks:
       - avr
 
   avr-tts-kokoro:
-    image: agentvoiceresponse/avr-tts-kokoro
+    image: greicodex/avr-tts-kokoro
     platform: linux/x86_64
     container_name: avr-tts-kokoro
     restart: always
@@ -38,10 +51,11 @@ services:
       - PORT=6012
       - KOKORO_BASE_URL=http://avr-kokoro:8880
       - KOKORO_VOICE=${KOKORO_VOICE:-af_alloy}
-      - KOKORO_SPEED=${KOKORO_SPEED:-1.3}
+      - KOKORO_SPEED=${KOKORO_SPEED:-1.0}
+      - KOKORO_LANG=${KOKORO_LANG:-a}
     networks:
       - avr
-  
+
   avr-kokoro:
     image: ghcr.io/remsky/kokoro-fastapi-cpu
     container_name: avr-kokoro
@@ -51,47 +65,41 @@ services:
     networks:
       - avr
 
+  avr-llm-anthropic:
+    image: agentvoiceresponse/avr-llm-anthropic
+    platform: linux/x86_64
+    container_name: avr-llm-anthropic
+    restart: always
+    environment:
+      - PORT=6014
+      - ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      - ANTHROPIC_MAX_TOKENS=${ANTHROPIC_MAX_TOKENS:-1024}
+      - ANTHROPIC_TEMPERATURE=${ANTHROPIC_TEMPERATURE:-1}
+      - ANTHROPIC_SYSTEM_PROMPT=${ANTHROPIC_SYSTEM_PROMPT:-Eres un asistente útil. Responde siempre en español latinoamericano, de forma clara y concisa.}
+      - AMI_URL=${AMI_URL:-http://avr-ami:6006}
+    # volumes: # uncomment to add custom tools
+    #   - ./functions:/usr/src/app/tools
+    networks:
+      - avr
+
   avr-llm-openai:
-    image: agentvoiceresponse/avr-llm-openai
+    image: greicodex/avr-llm-openai
     platform: linux/x86_64
     container_name: avr-llm-openai
     restart: always
     environment:
-      - PORT=6002
-      - OPENAI_BASEURL=http://avr-ollama:11434/v1
+      - PORT=6016
+      - OPENAI_BASEURL=http://192.168.68.108:1234/v1
       - OPENAI_API_KEY=$OPENAI_API_KEY
-      - OPENAI_MODEL=tinyllama
+      - OPENAI_MODEL=lfm2.5-vl-1.6b
       - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-100}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.0}
       - AMI_URL=${AMI_URL:-http://avr-ami:6006}
-      - SYSTEM_PROMPT="You are a helpful assistant."
+      - SYSTEM_PROMPT="Eres un agente de call center de Greicodex Software"
     networks:
       - avr 
 
-  avr-ollama:
-    image: ollama/ollama
-    container_name: avr-ollama
-    restart: always
-    ports:
-      - 11434:11434
-    volumes:
-      - ./ollama:/root/.ollama
-    networks:
-      - avr
-
-  avr-ollama-web:
-    image: ghcr.io/open-webui/open-webui
-    container_name: avr-ollama-web
-    restart: always
-    ports:
-      - 3001:8080
-    volumes:
-      - ./ollama-web:/app/backend/data
-    environment:
-      - OLLAMA_BASE_URL=http://avr-ollama:11434
-    networks:
-      - avr
-  
   avr-asterisk:
     image: agentvoiceresponse/avr-asterisk
     platform: linux/x86_64
@@ -99,7 +107,8 @@ services:
     restart: always
     ports:
       - 5038:5038
-      - 5060:5060
+      - 5060:5060/udp
+      - 5060:5060/tcp
       - 8088:8088
       - 8089:8089
       - 10000-10050:10000-10050/udp
@@ -135,4 +144,3 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/24
-          

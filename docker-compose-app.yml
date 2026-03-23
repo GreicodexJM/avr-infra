@@ -31,7 +31,7 @@ services:
       - ARI_USERNAME=${ARI_USERNAME:-avr}
       - ARI_PASSWORD=${ARI_PASSWORD:-avr}
       - TENANT=${TENANT:-demo}
-      - CORE_DEFAULT_IMAGE=agentvoiceresponse/avr-core
+      - CORE_DEFAULT_IMAGE=greicodex/avr-core
       - DB_TYPE=sqlite
       - DB_DATABASE=/app/data/data.db
       - ASTERISK_CONFIG_PATH=/app/asterisk
